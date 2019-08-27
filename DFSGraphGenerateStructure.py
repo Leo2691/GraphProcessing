@@ -12,16 +12,28 @@ class Graph():
 
 
     def generateStruct(self, start, end):
-        visited = [False] * self.V 
-        recStack = [False] * self.V 
+        visited = [0] * self.V 
+        recStack = [0] * self.V 
 
-        for i in np.arange(1, self.V ):
+        for i in np.arange(1, 100):
             countCon = np.random.randint(1, 4)
+            ids = np.unique([np.random.randint(3, self.V+1) for i in np.arange(countCon)])
             
-            for j in np.arange(countCon):
-                a = j
+            for j in ids:
+                if visited[j] == 0:
+                    self.genCon(j, visited, recStack)
+
+    def genCon(self, v, visited, recStack):
+        visited[v] = 1
+        recStack[v] = 1
+        
 
 
-g = Graph(6)
+
+        return 1
+                
+
+
+g = Graph(8)
 
 g.generateStruct(1, 2)
