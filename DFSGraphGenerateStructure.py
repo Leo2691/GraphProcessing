@@ -2,24 +2,29 @@ import numpy as np
 import collections
 
 class Graph():
-    def __init__(self, vertices):
+    def __init__(self, vertices, start, end):
         self.graph = collections.defaultdict(list) 
         self.V = vertices 
-
+        self.start = start
+        self.end = end
 
     def addEdge(self, u, v): 
-            self.graph[u].append(v) 
+        self.graph[u].append(v) 
 
 
-    def generateStruct(self, start, end):
+    def generateStruct(self):
         visited = [0] * self.V 
         recStack = [0] * self.V 
 
         for i in np.arange(1, 100):
+            # count connections with input
             countCon = np.random.randint(1, 4)
-            ids = np.unique([np.random.randint(3, self.V+1) for i in np.arange(countCon)])
-            
+            # ids connections with input
+            ids = np.unique([np.random.randint(3, self.V+1) for i in np.arange(countCon)]) 
+
             for j in ids:
+                 # add conns with input 
+                g.addEdge(start, j)
                 if visited[j] == 0:
                     self.genCon(j, visited, recStack)
 
@@ -34,6 +39,6 @@ class Graph():
                 
 
 
-g = Graph(8)
+g = Graph(8, 1, 2)
 
-g.generateStruct(1, 2)
+g.generateStruct()
