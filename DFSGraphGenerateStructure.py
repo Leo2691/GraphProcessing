@@ -120,11 +120,24 @@ def main(n):
 
     AM = g.getAdjacencyMatrix()
 
+    # search ending nods without connections
+    u = np.array(np.where(AM.sum(axis=1) == 0))
+    emptyRows = np.array(u)[np.array(u) != 1]
+    for i in emptyRows:
+        if (AM[:, i].sum(axis=0) == 0):
+            AM[:, i] = 0
+        else:
+            AM[i, 1] = 1
+
+    print(emptyRows)
     print(AM)
     io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
+    
 
     return AM
-main(12)
+
+    
+main(50)
 
 
 
