@@ -49,7 +49,7 @@ class Graph():
             #else:
                 #return
 
-         # count connections with input
+        # count connections with input
         countCon = np.random.randint(1, self.limitCon + 1)
         # list elements for chousen
         posiblElems = np.arange(self.V)[elementsMask]
@@ -58,7 +58,7 @@ class Graph():
         ids = np.unique([np.random.choice(posiblElems) for i in np.arange(countCon)]) 
 
         for j in ids:
-                 # add conns with input 
+                # add conns with input 
                 g.addEdge(v, j)
                 if visited[j] <= self.limitCon:
                     self.genCon(g, j, visited, elementsMask)
@@ -137,7 +137,7 @@ def main(n):
     return AM
 
     
-main(50)
+main(25)
 
 
 
