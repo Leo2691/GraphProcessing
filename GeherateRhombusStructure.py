@@ -7,6 +7,7 @@ from scipy import io
 
 from scipy.stats import norm
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import imshow
 
 class Graph():
     def __init__(self, vertices, layers, start, end, limitCon):
@@ -59,48 +60,76 @@ class Graph():
     def generateStruct(self):
 
         for i in np.arange(len(self.Layers[self.start])):
-            self.addEdge(self.start, self.Layers[0][i])
+            self.addEdge([self.start], self.Layers[0][i])
 
-        for i in np.arange(len(self.Layers[self.L - 1])):
-            self.addEdge(self.end, self.Layers[self.L - 1][i])
+        #for i in np.arange(len(self.Layers[self.L - 1])):
+        self.addEdge(self.Layers[self.L - 1], self.end)
 
         for i in np.arange(0, self.L - 1):
             curLayerNumElems = len(self.Layers[i])
             nextLayerNumElems = len(self.Layers[i + 1])
 
             if (curLayerNumElems < nextLayerNumElems):
-                countOfGroups = min(curLayerNumElems, nextLayerNumElems)
-                ind = np.array(self.Layers[i + 1]).reshape(-1, 1)
-                for k in np.arange(ind.shape[0]):
-
-                ind = np.random.choice(range(ind.shape[0]), size=len(ind), replace=False)
+                countOfGroups = curLayerNumElems
+                ind = np.array(self.Layers[i + 1])#.reshape(-1, 1)
                 groups = np.array_split(ind, countOfGroups)
-
                 for j in np.arange(len(groups)):
                     self.graph[self.Layers[i][j]] = list(groups[j])
 
             if (curLayerNumElems > nextLayerNumElems):
                 countOfGroups = nextLayerNumElems
-                ind = np.array(self.Layers[i]).reshape(-1, 1)
-                ind = np.random.choice(range(ind.shape[0]), size=len(ind), replace=False)
+                ind = np.array(self.Layers[i])
                 groups = np.array_split(ind, countOfGroups)
                 for j in np.arange(len(groups)):
-                    for k in groups[j]:
-                        self.addEdge([groups[j][k]], self.Layers[i][j])
+                    self.addEdge(groups[j], self.Layers[i + 1][j])
 
+    def isCyclicUtil(self, v, visited, recStack):
 
+        # Mark current node as visited and
+        # adds to recursion stack
+        visited[v] = True
+        recStack[v] = True
 
+        # Recur for all neighbours
+        # if any neighbour is visited and in
+        # recStack then graph is cyclic
+        copyV = copy.copy(self.graph[v]);
+        for neighbour in copyV:
+            if visited[neighbour] == False:
+                if self.isCyclicUtil(neighbour, visited, recStack) == True:
+                    return True
+            elif recStack[neighbour] == True:
+                self.graph[v].remove(neighbour)
+                # return True
 
+        # The node needs to be poped from
+        # recursion stack before function ends
+        recStack[v] = False
+        return False
 
+    # Returns true if graph is cyclic else false
+    def isCyclic(self):
+        visited = [False] * self.V
+        recStack = [False] * self.V
+        for node in range(self.V):
+            if visited[node] == False:
+                # if self.isCyclicUtil(node,visited,recStack) == True:
+                # return True
+                self.isCyclicUtil(node, visited, recStack)
+        return False
 
+    def getAdjacencyMatrix(self):
+        AM = np.zeros((self.V, self.V))
+        for g in self.graph:
+            for i in self.graph[g]:
+                AM[g, i] = 1
 
+        return AM
 
-
-
-
-
-    def addEdge(self, u, v): 
-        self.graph[u].append(v) 
+    def addEdge(self, u, v):
+        u = np.array(u)
+        for i in np.arange(len(u)):
+            self.graph[u[i]].append(v)
     
     def addElemInLayer(self, u, v): 
         self.Layers[u].append(v) 
@@ -112,9 +141,43 @@ class Graph():
     
 
 
-g = Graph(16, 3, 0, 1, 2)
+""".imshg = Graph(16, 3, 0, 1, 2)
 g.calcLayers()
 g.generateStruct()
+AM = g.getAdjacencyMatrix()
+pltow(AM)
+plt.show()
+
+t = 1"""
+
+
+def main(n, layers, limCon):
+    g = Graph(n, layers, 0, 1, 2)
+    g.calcLayers()
+    g.generateStruct()
+
+    AM = g.getAdjacencyMatrix()
+
+    # search ending nods without connections
+    """u = np.array(np.where(AM.sum(axis=1) == 0))
+    emptyRows = np.array(u)[np.array(u) != 1]
+    for i in emptyRows:
+        if (AM[:, i].sum(axis=0) == 0):
+            AM[:, i] = 0
+        else:
+            AM[i, 1] = 1"""
+
+    #plt.imshow(AM)
+    #plt.show()
+
+    # print(emptyRows)
+    print(AM)
+    io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
+
+    return AM
+
+main(39, 4, 4)
+
 
 """x = [i for i in np.arange(start = 1, stop = 4)] 
 mn = (min(x) + max(x)) / 2 
