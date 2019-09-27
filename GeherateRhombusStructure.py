@@ -44,7 +44,14 @@ class Graph():
                 self.addElemInLayer(i, j)
                 bollmask[j] = False
 
-
+        # not all elements will use in in the model
+        # we will take [60%, 100%] of elements randomly
+        for i in np.arange(self.L):
+            percentOfDel = np.random.choice(np.arange(0, 45, dtype=int)) / 100
+            countOfDel = int(len(self.Layers[i]) * percentOfDel)
+            selection = np.random.choice((self.Layers[i]), replace=False, size=countOfDel)
+            if len(selection) > 0:
+                self.Layers[i] = [elem for elem in self.Layers[i] if elem not in selection]
 
         # print(np.sum(percentOfL))
         #print(np.sum(countOfL))
