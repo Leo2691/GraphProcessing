@@ -4,6 +4,8 @@ import collections
 import copy
 import sys
 from scipy import io
+#import networkx as nx
+import math
 
 from scipy.stats import norm
 import matplotlib.pyplot as plt
@@ -11,22 +13,23 @@ from matplotlib.pyplot import imshow
 
 class Graph():
     def __init__(self, vertices, layers, start, end, limitCon):
-        self.graph = collections.defaultdict(list)
-        self.Layers = collections.defaultdict(list)
-        self.L = layers 
-        self.V = vertices 
-        self.start = start
-        self.end = end
-        self.limitCon = limitCon
+        self.graph = collections.defaultdict(list) # list of lists for holding nodes
+        self.Layers = collections.defaultdict(list) #list of lists for holding elements of each layers
+        self.L = layers #count of layers
+        self.V = vertices  #count of nides
+        self.start = start # start node
+        self.end = end #end node
+        self.limitCon = limitCon #limit of connections
 
     def calcLayers(self):
 
         allElements = np.arange(self.V)
+
         percentOfL = np.zeros(self.L)
         countOfL = np.zeros(self.L, dtype=int)
-        
-        mn = (0 + self.L - 1) / 2 # (min(x) + max(x)) / 2 
-        sgm = self.Sigma(self.L - 1) 
+
+        mn = (0 + self.L - 1) / 2 # (min(x) + max(x)) / 2
+        sgm = self.Sigma(self.L - 1)
 
         bollmask = [True] * len(allElements)
         bollmask[self.start] = False
@@ -36,12 +39,14 @@ class Graph():
             percentOfL[i] = round(norm.pdf(i, mn, sgm) * 100)
             countOfL[i] = int(percentOfL[i] * (self.V - 2) / 100)
             ind = np.random.choice(allElements[bollmask], replace=False, size=countOfL[i])
-            
+
             for j in ind:
                 self.addElemInLayer(i, j)
                 bollmask[j] = False
 
-        #print(np.sum(percentOfL))
+
+
+        # print(np.sum(percentOfL))
         #print(np.sum(countOfL))
 
         # Vizualuzation
@@ -53,16 +58,17 @@ class Graph():
 
 
     def Sigma(self, numLayers): 
-        x = numLayers;
+        x = numLayers
         sgm = (x/7 - 3/7 + 0.9 / (2.5 - 0.9)) * (2.5 - 0.9) 
         return sgm
 
     def generateStruct(self):
 
+        #connection strat node with second layer
         for i in np.arange(len(self.Layers[self.start])):
             self.addEdge([self.start], self.Layers[0][i])
 
-        #for i in np.arange(len(self.Layers[self.L - 1])):
+        # connection end-1 layer with end node
         self.addEdge(self.Layers[self.L - 1], self.end)
 
         for i in np.arange(0, self.L - 1):
@@ -76,12 +82,27 @@ class Graph():
                 for j in np.arange(len(groups)):
                     self.graph[self.Layers[i][j]] = list(groups[j])
 
-            if (curLayerNumElems > nextLayerNumElems):
+                    #additional cross connections
+                    countCrossCon = int(math.ceil(
+                        (len(groups[j]) / 100 * 30))) #30 - 30% of group elements - count of cross connections
+                    ix = ~np.isin(ind, groups[j])
+                    crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
+                    self.graph[self.Layers[i][j]] = self.graph[self.Layers[i][j]] + list(crossCon)
+
+            if (curLayerNumElems >= nextLayerNumElems):
                 countOfGroups = nextLayerNumElems
                 ind = np.array(self.Layers[i])
                 groups = np.array_split(ind, countOfGroups)
                 for j in np.arange(len(groups)):
                     self.addEdge(groups[j], self.Layers[i + 1][j])
+
+                    # additional cross connections
+                    countCrossCon = int(math.ceil(
+                        (len(groups[j]) / 100 * 30)))  # 30 - 30% of group elements - count of cross connections
+                    ix = ~np.isin(ind, groups[j])
+                    crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
+                    self.addEdge(crossCon, self.Layers[i + 1][j])
+
 
     def isCyclicUtil(self, v, visited, recStack):
 
@@ -157,6 +178,11 @@ def main(n, layers, limCon):
     g.generateStruct()
 
     AM = g.getAdjacencyMatrix()
+    #G = nx.from_numpy_matrix(np.array(AM))
+    #nx.draw(G, with_labels=True)
+    #plt.show()
+
+    print(sum(sum(AM)))
 
     # search ending nods without connections
     """u = np.array(np.where(AM.sum(axis=1) == 0))
@@ -171,12 +197,12 @@ def main(n, layers, limCon):
     #plt.show()
 
     # print(emptyRows)
-    print(AM)
+    # print(AM)
     io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
 
     return AM
 
-main(39, 4, 4)
+main(50, 4, 4)
 
 
 """x = [i for i in np.arange(start = 1, stop = 4)] 
