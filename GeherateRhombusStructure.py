@@ -16,7 +16,7 @@ class Graph():
         self.graph = collections.defaultdict(list) # list of lists for holding nodes
         self.Layers = collections.defaultdict(list) #list of lists for holding elements of each layers
         self.L = layers #count of layers
-        self.V = vertices  #count of nides
+        self.V = int(vertices)  #count of nides
         self.start = start # start node
         self.end = end #end node
         self.limitCon = limitCon #limit of connections
@@ -62,7 +62,6 @@ class Graph():
         #plt.plot(x, y) 
         #plt.show() 
         #print(x)
-
 
     def Sigma(self, numLayers): 
         x = numLayers
@@ -167,7 +166,17 @@ class Graph():
             self.graph[i] = (list(set(self.graph[i])))
 
     
+def checkAdjacencyMatrixOnCyclic(AM):
+    n = sum(sum(AM))
+    g1 = Graph(n, 1, 0, 1, 2)
+    for i in np.arange(AM.shape[0]):
+        for j in np.arange(AM.shape[1]):
+            if(AM[i, j] != 0):
+                g1.addEdge([i], j)
+    g1.isCyclic()
+    AM1 = g1.getAdjacencyMatrix()
 
+    return AM
 
 """.imshg = Graph(16, 3, 0, 1, 2)
 g.calcLayers()
@@ -188,6 +197,8 @@ def main(n, layers, limCon):
     #G = nx.from_numpy_matrix(np.array(AM))
     #nx.draw(G, with_labels=True)
     #plt.show()
+
+    AM = checkAdjacencyMatrixOnCyclic(AM)
 
     print(sum(sum(AM)))
 
