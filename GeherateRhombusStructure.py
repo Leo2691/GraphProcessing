@@ -1,4 +1,4 @@
-import numpy as np 
+import numpy as np
 import scipy as sc 
 import collections
 import copy
@@ -6,6 +6,8 @@ import sys
 from scipy import io
 #import networkx as nx
 import math
+import glob
+from typing import NamedTuple
 
 from scipy.stats import norm
 import matplotlib.pyplot as plt
@@ -20,6 +22,7 @@ class Graph():
         self.start = start # start node
         self.end = end #end node
         self.limitCon = limitCon #limit of connections
+        self.removedNodes = list()
 
     def calcLayers(self):
 
@@ -120,13 +123,14 @@ class Graph():
         # Recur for all neighbours
         # if any neighbour is visited and in
         # recStack then graph is cyclic
-        copyV = copy.copy(self.graph[v]);
+        copyV = copy.copy(self.graph[v])
         for neighbour in copyV:
             if visited[neighbour] == False:
                 if self.isCyclicUtil(neighbour, visited, recStack) == True:
                     return True
             elif recStack[neighbour] == True:
                 self.graph[v].remove(neighbour)
+                self.removedNodes.append([v, neighbour])
                 # return True
 
         # The node needs to be poped from
@@ -136,9 +140,9 @@ class Graph():
 
     # Returns true if graph is cyclic else false
     def isCyclic(self):
-        visited = [False] * self.V
-        recStack = [False] * self.V
-        for node in range(self.V):
+        visited = [False] * (self.V-1)
+        recStack = [False] * (self.V-1)
+        for node in range(self.V-1):
             if visited[node] == False:
                 # if self.isCyclicUtil(node,visited,recStack) == True:
                 # return True
@@ -166,7 +170,43 @@ class Graph():
             self.graph[i] = (list(set(self.graph[i])))
 
     
-def checkAdjacencyMatrixOnCyclic(AM):
+def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
+
+    """AM = np.array([[0, 0, 0, 1, 0],
+          [0, 0, 0, 0, 0],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+          [0, 1, 0, 0, 0]])
+
+    GenAM = np.array([[0, 0, 0, 1, 0],
+                   [0, 0, 0, 0, 0],
+                   [1, 0, 0, 0, 1],
+                   [0, 0, 0, 0, 0],
+                   [0, 1, 0, 0, 0]], dtype=float)"""
+
+
+    # search ending nods without connections
+    u = np.array(np.where(AM.sum(axis=1) == 0))
+    emptyRows = np.array(u)[np.array(u) != 1]
+    for i in emptyRows:
+        if (AM[:, i].sum(axis=0) == 0):
+            AM[:, i] = 0
+            GenAM[:, i] = 0
+        else:
+            AM[i, 1] = 1
+            GenAM[i, 1] = minWeigOfCon
+
+    # search nods without inputs
+    u = np.array(np.where(AM.sum(axis=0) == 0))
+    emptyColls = np.array(u)[np.array(u) != 0]
+    for i in emptyColls:
+        if (AM[i, :].sum(axis=0) == 0):
+            AM[i, :] = 0
+            GenAM[i, :] = 0
+        else:
+            AM[0, i] = 1
+            GenAM[0, i] = minWeigOfCon
+
     n = sum(sum(AM))
     g1 = Graph(n, 1, 0, 1, 2)
     for i in np.arange(AM.shape[0]):
@@ -174,9 +214,82 @@ def checkAdjacencyMatrixOnCyclic(AM):
             if(AM[i, j] != 0):
                 g1.addEdge([i], j)
     g1.isCyclic()
-    AM1 = g1.getAdjacencyMatrix()
+    AM = g1.getAdjacencyMatrix()
 
-    return AM
+    ## del cyclic connections in GenAM
+    for i in np.arange(len(g1.removedNodes)):
+        x = g1.removedNodes[i][0]
+        y = g1.removedNodes[i][1]
+        GenAM[x, y] = 0
+
+    return [AM, GenAM]
+
+## class for kepping parent info
+class Parent(NamedTuple):
+    path: str
+    GenAM: np.array = 0
+    WeigGenAM: np.array = 0
+
+def generateChildrens(path):
+    filesParentsGenAM = [f for f in glob.glob(path + "\parents\**\GenAM*.mat", recursive=True)]
+
+    dictParents = {}
+    i = 0
+    for f in filesParentsGenAM:
+        GenAM = io.loadmat(f.replace('\\', '/', 1))
+        WeigGenAM = io.loadmat(f.replace('GenAM', 'WeigGenAM', 1))
+
+        par = Parent(f, GenAM['GenAM'], WeigGenAM['WeigGenAM'])
+        x = {i: par}
+        dictParents.update(x)
+        i += 1
+
+    children_path = path + '\children'
+    n_parents = i
+    n_child = 0.5 * n_parents # 50% from all parents is count of new children
+
+    for i in np.arange(n_child):
+        # path to the new kid
+        pth = children_path + '/' + str(int(i+1))
+        n = np.arange(2, 5, 1)
+        count_parents = np.random.choice(n, 1)
+        pr = np.arange(0, n_parents)
+        parents = np.random.choice(pr, replace=False, size=count_parents)
+
+        new_kid = dictParents[0].WeigGenAM * 0
+        countOfConnections = 0
+
+        for j in np.arange(count_parents):
+            new_kid = new_kid + dictParents[parents[j]].WeigGenAM
+            countOfConnections += np.count_nonzero(dictParents[parents[j]].WeigGenAM)
+
+        new_kid = new_kid / count_parents
+        countOfConnections = int(countOfConnections / count_parents)
+
+        GenAM = new_kid / np.amax(new_kid)
+
+        # max powerfull connections in matrix
+        valuesCon = sorted(GenAM.ravel(), reverse=True)[0:countOfConnections]
+        mask = np.array(np.isin(GenAM, valuesCon))
+        AM = mask * 1
+
+        #checking AM correction
+        minWaightOfCon = min(valuesCon)
+
+        [AM, GenAM] = checkAMOnCyclic(AM, GenAM, minWaightOfCon)
+
+
+
+
+
+
+        io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
+        io.savemat('AdjacencyMatrix.mat', mdict={'GenAM': AM})
+
+        print(path)
+
+path = './Experiments/GeneticAlgorithmExp1/Generations/1'
+generateChildrens(path)
 
 """.imshg = Graph(16, 3, 0, 1, 2)
 g.calcLayers()
@@ -198,7 +311,7 @@ def main(n, layers, limCon):
     #nx.draw(G, with_labels=True)
     #plt.show()
 
-    AM = checkAdjacencyMatrixOnCyclic(AM)
+    #AM = checkAdjacencyMatrixOnCyclic(AM, AM, 0.2)
 
     print(sum(sum(AM)))
 
