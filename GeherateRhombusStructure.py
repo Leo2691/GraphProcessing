@@ -1,13 +1,14 @@
 import numpy as np
-import scipy as sc 
 import collections
 import copy
 import sys
-from scipy import io
+from scipy import io, sparse, stats
 #import networkx as nx
 import math
 import glob
 from typing import NamedTuple
+import shutil
+import os
 
 from scipy.stats import norm
 import matplotlib.pyplot as plt
@@ -95,8 +96,11 @@ class Graph():
                     countCrossCon = int(math.ceil(
                         (len(groups[j]) / 100 * 30))) #30 - 30% of group elements - count of cross connections
                     ix = ~np.isin(ind, groups[j])
-                    crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
-                    self.graph[self.Layers[i][j]] = self.graph[self.Layers[i][j]] + list(crossCon)
+                    try:
+                        crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
+                        self.graph[self.Layers[i][j]] = self.graph[self.Layers[i][j]] + list(crossCon)
+                    except:
+                        print("layer without cross Connections")
 
             if (curLayerNumElems >= nextLayerNumElems):
                 countOfGroups = nextLayerNumElems
@@ -109,9 +113,11 @@ class Graph():
                     countCrossCon = int(math.ceil(
                         (len(groups[j]) / 100 * 30)))  # 30 - 30% of group elements - count of cross connections
                     ix = ~np.isin(ind, groups[j])
-                    crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
-                    self.addEdge(crossCon, self.Layers[i + 1][j])
-
+                    try:
+                        crossCon = np.random.choice(ind[ix], countCrossCon, replace=False)
+                        self.addEdge(crossCon, self.Layers[i + 1][j])
+                    except:
+                        print("layer without cross Connections")
 
     def isCyclicUtil(self, v, visited, recStack):
 
@@ -140,9 +146,9 @@ class Graph():
 
     # Returns true if graph is cyclic else false
     def isCyclic(self):
-        visited = [False] * (self.V-1)
-        recStack = [False] * (self.V-1)
-        for node in range(self.V-1):
+        visited = [False] * (self.V)
+        recStack = [False] * (self.V)
+        for node in range(self.V):
             if visited[node] == False:
                 # if self.isCyclicUtil(node,visited,recStack) == True:
                 # return True
@@ -207,8 +213,14 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
             AM[0, i] = 1
             GenAM[0, i] = minWeigOfCon
 
+    for i in np.arange(AM.shape[0]):
+        for j in np.arange(AM.shape[1]):
+            if i == j:
+                AM[i, j] = 0
+                GenAM[i, j] = 0
+
     n = sum(sum(AM))
-    g1 = Graph(n, 1, 0, 1, 2)
+    g1 = Graph(AM.shape[0], 1, 0, 1, 2)
     for i in np.arange(AM.shape[0]):
         for j in np.arange(AM.shape[1]):
             if(AM[i, j] != 0):
@@ -222,6 +234,35 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
         y = g1.removedNodes[i][1]
         GenAM[x, y] = 0
 
+    # search ending nods without connections
+    u = np.array(np.where(AM.sum(axis=1) == 0))
+    emptyRows = np.array(u)[np.array(u) != 1]
+    for i in emptyRows:
+        if (AM[:, i].sum(axis=0) == 0):
+            AM[:, i] = 0
+            GenAM[:, i] = 0
+        else:
+            AM[i, 1] = 1
+            GenAM[i, 1] = minWeigOfCon
+
+    # search nods without inputs
+    u = np.array(np.where(AM.sum(axis=0) == 0))
+    emptyColls = np.array(u)[np.array(u) != 0]
+    for i in emptyColls:
+        if (AM[i, :].sum(axis=0) == 0):
+            AM[i, :] = 0
+            GenAM[i, :] = 0
+        else:
+            AM[0, i] = 1
+            GenAM[0, i] = minWeigOfCon
+
+
+    # comparision AM and GenAM
+    m = np.where(AM > 0)  # indexis of nonzeros
+    A = GenAM.astype(bool).astype(int) # GenAM to [0,1]
+    s1 = sum(AM[m[0], m[1]]) # sum of all nonzeros in AM with mask m
+    s2 = sum(A[m[0], m[1]])  # sum of all nonzeros in A (GenAM in the past) with mask m
+
     return [AM, GenAM]
 
 ## class for kepping parent info
@@ -229,48 +270,72 @@ class Parent(NamedTuple):
     path: str
     GenAM: np.array = 0
     WeigGenAM: np.array = 0
+    AM: np.array = 0
+    minWaightOfCon: int = 0
+    countOfConnections: int = 0
 
-def generateChildrens(path):
+def generateChildrens(path, n_child):
     filesParentsGenAM = [f for f in glob.glob(path + "\parents\**\GenAM*.mat", recursive=True)]
 
     dictParents = {}
     i = 0
     for f in filesParentsGenAM:
-        GenAM = io.loadmat(f.replace('\\', '/', 1))
-        WeigGenAM = io.loadmat(f.replace('GenAM', 'WeigGenAM', 1))
+        GenAM = io.loadmat(f.replace('\\', '/', 1))['GenAM']
+        S = np.sum(np.sum(GenAM))
+        WeigGenAM = io.loadmat(f.replace('GenAM', 'WeigGenAM', 1))['WeigGenAM']
+        minWaightOfCon = io.loadmat(f.replace('GenAM', 'minWaightOfCon', 1))['minWaightOfCon'][0][0]
+        countOfConnections = io.loadmat(f.replace('GenAM', 'countOfConnections', 1))['countOfConnections'][0][0]
+        calculated = io.loadmat(f.replace('GenAM', 'calculated', 1))['calculated'][0]
+        AM = io.loadmat(f.replace('GenAM', 'AM', 1))['AM']
 
-        par = Parent(f, GenAM['GenAM'], WeigGenAM['WeigGenAM'])
-        x = {i: par}
-        dictParents.update(x)
-        i += 1
+        if calculated == 'True':
+            par = Parent(f, GenAM, WeigGenAM, AM, minWaightOfCon, countOfConnections)
+            x = {i: par}
+            dictParents.update(x)
+            i += 1
 
-    children_path = path + '\children'
-    n_parents = i
-    n_child = 0.5 * n_parents # 50% from all parents is count of new children
+    n_parents = len(dictParents)
+    #n_child = 0.5 * n_parents # 50% from all parents is count of new children
 
+    #create folder for children
+    path = os.path.normpath(path)
+    directory = 'children'
+    path_children = os.path.join(path, directory)
+    try:
+        os.stat(path_children)
+    except:
+        os.mkdir(path_children)
+
+    # Breeding
     for i in np.arange(n_child):
-        # path to the new kid
-        pth = children_path + '/' + str(int(i+1))
+
+        # count on parents
         n = np.arange(2, 5, 1)
         count_parents = np.random.choice(n, 1)
         pr = np.arange(0, n_parents)
+        # random chousen parents
         parents = np.random.choice(pr, replace=False, size=count_parents)
 
         new_kid = dictParents[0].WeigGenAM * 0
         countOfConnections = 0
 
+        # cycle for the each parent and creation new kid
+        parents_txt = ""
         for j in np.arange(count_parents):
             new_kid = new_kid + dictParents[parents[j]].WeigGenAM
             countOfConnections += np.count_nonzero(dictParents[parents[j]].WeigGenAM)
+            parents_txt += (os.path.normpath(dictParents[parents[j]].path) + '\n')
 
         new_kid = new_kid / count_parents
         countOfConnections = int(countOfConnections / count_parents)
 
+        # genAM for new kid
         GenAM = new_kid / np.amax(new_kid)
 
         # max powerfull connections in matrix
         valuesCon = sorted(GenAM.ravel(), reverse=True)[0:countOfConnections]
         mask = np.array(np.isin(GenAM, valuesCon))
+        # AM for new kid
         AM = mask * 1
 
         #checking AM correction
@@ -278,18 +343,147 @@ def generateChildrens(path):
 
         [AM, GenAM] = checkAMOnCyclic(AM, GenAM, minWaightOfCon)
 
+        #path_to_curr_kid = os.path.normpath(path_children)
+        directory = str(int(i+1))
+        path_to_curr_kid = os.path.join(path_children, directory)
 
+        try:
+            os.stat(path_to_curr_kid)
+        except:
+            os.mkdir(path_to_curr_kid)
 
+        # create data and save it for new kid
+        path_to_first_parent = os.path.normpath(dictParents[parents[0]].path)
+        shutil.copy(path_to_first_parent.replace('GenAM', 'inputDsc', 1), (path_to_curr_kid + '\inputDsc.mat'))
+        shutil.copy(path_to_first_parent.replace('GenAM', 'strateges', 1), (path_to_curr_kid + '\strateges.mat'))
 
+        countOfConnections = int(np.sum(np.sum(AM)))
+        io.savemat(path_to_curr_kid + '\AM.mat', mdict={'AM': AM})
+        io.savemat(path_to_curr_kid + '\GenAM.mat', mdict={'GenAM': GenAM})
+        io.savemat(path_to_curr_kid + '\minWaightOfCon.mat', mdict={'minWaightOfCon': minWaightOfCon})
+        io.savemat(path_to_curr_kid + '\countOfConnections.mat', mdict={'countOfConnections': countOfConnections})
 
+        calculated = 'False'
+        io.savemat(path_to_curr_kid + '\calculated.mat', mdict={'calculated': calculated})
 
-        io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
-        io.savemat('AdjacencyMatrix.mat', mdict={'GenAM': AM})
+        # how long hi live
+        age = 0
+        io.savemat(path_to_curr_kid + '/age.mat', mdict={'age': age})
+
+        textfile = open(path_to_curr_kid + '\parents.txt', 'w')
+        textfile.write(parents_txt)
+        textfile.close()
+
 
         print(path)
 
-path = './Experiments/GeneticAlgorithmExp1/Generations/1'
-generateChildrens(path)
+def generateMutants(path, n_mutants):
+    filesParentsGenAM = [f for f in glob.glob(path + "\parents\**\GenAM*.mat", recursive=True)]
+
+    dictParents = {}
+    i = 0
+    for f in filesParentsGenAM:
+        GenAM = io.loadmat(f.replace('\\', '/', 1))['GenAM']
+        S = np.sum(np.sum(GenAM))
+        WeigGenAM = io.loadmat(f.replace('GenAM', 'WeigGenAM', 1))['WeigGenAM']
+        minWaightOfCon = io.loadmat(f.replace('GenAM', 'minWaightOfCon', 1))['minWaightOfCon'][0][0]
+        countOfConnections = io.loadmat(f.replace('GenAM', 'countOfConnections', 1))['countOfConnections'][0][0]
+        calculated = io.loadmat(f.replace('GenAM', 'calculated', 1))['calculated'][0]
+        AM = io.loadmat(f.replace('GenAM', 'AM', 1))['AM']
+
+        if calculated == 'True':
+            par = Parent(f, GenAM, WeigGenAM, AM, minWaightOfCon, countOfConnections)
+            x = {i: par}
+            dictParents.update(x)
+            i += 1
+
+    # create folder for the mutants
+    path = os.path.normpath(path)
+    directory = 'mutants'
+    path_mutants = os.path.join(path, directory)
+    try:
+        os.stat(path_mutants)
+    except:
+        os.mkdir(path_mutants)
+
+    # n_mutants is count of mutants
+    # Breeding
+    i = 0
+    #for i in np.arange(0, n_mutants, n):
+    while i != n_mutants:
+
+        # chouisen parent for the mutation
+        num_ch_parent = np.random.choice(len(dictParents))
+        ch_parent = dictParents[num_ch_parent]
+        # random chousen parent
+
+        # specify probability distribution
+        rvs = stats.norm(loc=0, scale=ch_parent.minWaightOfCon).rvs
+        # create sparse random matrix with specific probability distribution/random numbers.
+        sparseMart = sparse.random(ch_parent.GenAM.shape[0], ch_parent.GenAM.shape[1], density=0.03, data_rvs=rvs).toarray()
+        sparseMart[:, 0] = 0
+        sparseMart[1, :] = 0
+
+        new_mutant = ch_parent.GenAM + sparseMart
+        new_mutant[new_mutant < 0] = 0
+        new_mutant[new_mutant > 1] = 1
+
+        # genAM for new MUTANT
+        GenAM = new_mutant
+
+        # max powerfull connections in matrix
+        valuesCon = sorted(GenAM.ravel(), reverse=True)[0:ch_parent.countOfConnections]
+        mask = np.array(np.isin(GenAM, valuesCon))
+        # AM for new kid
+        AM = mask * 1
+
+        # checking AM correction
+        minWaightOfCon = min(valuesCon)
+
+        [AM, GenAM] = checkAMOnCyclic(AM, GenAM, minWaightOfCon)
+
+        # IF ch_parent.AM != new_mutant_AM
+        if(np.sum(np.sum(ch_parent.AM - AM)) != 0):
+            # path_to_curr_kid = os.path.normpath(path_children)
+            directory = str(int(i + 1))
+            path_to_curr_mut = os.path.join(path_mutants, directory)
+
+            try:
+                os.stat(path_to_curr_mut)
+            except:
+                os.mkdir(path_to_curr_mut)
+
+            # create data and save it for new kid
+            path_to_parent = os.path.normpath(ch_parent.path)
+            shutil.copy(path_to_parent.replace('GenAM', 'inputDsc', 1), (path_to_curr_mut + '\inputDsc.mat'))
+            shutil.copy(path_to_parent.replace('GenAM', 'strateges', 1), (path_to_curr_mut + '\strateges.mat'))
+
+            countOfConnections = int(np.sum(np.sum(AM)))
+            io.savemat(path_to_curr_mut + '\AM.mat', mdict={'AM': AM})
+            io.savemat(path_to_curr_mut + '\GenAM.mat', mdict={'GenAM': GenAM})
+            io.savemat(path_to_curr_mut + '\minWaightOfCon.mat', mdict={'minWaightOfCon': minWaightOfCon})
+            io.savemat(path_to_curr_mut + '\countOfConnections.mat', mdict={'countOfConnections': countOfConnections})
+
+
+            calculated = 'False'
+            io.savemat(path_to_curr_mut + '\calculated.mat', mdict={'calculated': calculated})
+
+            # how long hi live
+            age = 0
+            io.savemat(path_to_curr_mut + '/age.mat', mdict={'age': age})
+
+            parents_txt = ch_parent.path
+            textfile = open(path_to_curr_mut + '\parents.txt', 'w')
+            textfile.write(parents_txt)
+            textfile.close()
+            i += 1
+            print(path_to_curr_mut)
+        #else:
+
+
+path = './Experiments/GeneticAlgorithmExp2/Slots/1/Generations/3'
+#generateMutants(path, 10)
+#generateChildrens(path, 10)
 
 """.imshg = Graph(16, 3, 0, 1, 2)
 g.calcLayers()
@@ -313,7 +507,7 @@ def main(n, layers, limCon):
 
     #AM = checkAdjacencyMatrixOnCyclic(AM, AM, 0.2)
 
-    print(sum(sum(AM)))
+    #print(sum(sum(AM)))
 
     # search ending nods without connections
     """u = np.array(np.where(AM.sum(axis=1) == 0))
@@ -333,7 +527,7 @@ def main(n, layers, limCon):
 
     return AM
 
-main(50, 4, 4)
+#main(10, 3, 4)
 
 
 """x = [i for i in np.arange(start = 1, stop = 4)] 
