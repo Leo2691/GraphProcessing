@@ -50,16 +50,21 @@ class Graph():
         countOfL = np.zeros(self.L, dtype=int)  # array for number of elements in each layer
         countLocked = len(self.start) + len(self.end)
 
-        mn = (0 + self.L - 1) / 2  # (min(x) + max(x)) / 2 # mathematical expectation of a normal distribution
-        sgm = self.Sigma(self.L - 1)  # standard deviation
+        mn = (1 + self.L - 2) / 2  # (min(x) + max(x)) / 2 # mathematical expectation of a normal distribution
+        sgm = self.Sigma(self.L - 2)  # standard deviation
 
         bollmask = [True] * len(allElements)  # mask for  array of elements
         for i in self.start:
-            bollmask[i] = False # Input is not selectable
+            bollmask[i] = False  # Input is not selectable
+            self.addElemInLayer(0, i)
         for i in self.end:
             bollmask[i] = False  # Output is not selectable
+            self.addElemInLayer(self.L - 1, i)
+
+        #First and last layers is inputs and output
+
         # Layer cycle
-        for i in np.arange(self.L):
+        for i in np.arange(1, self.L - 1, 1):
 
             percentOfL[i] = round(norm.pdf(i, mn, sgm) * 100)  # percents of the elements in current layer
             countOfL[i] = int(percentOfL[i] * (self.V - countLocked) / 100)  # number of the elements in current layer
@@ -73,7 +78,7 @@ class Graph():
 
         # not all elements will use in in the model
         # we will take [80%, 100%] of elements randomly
-        for i in np.arange(self.L):
+        for i in np.arange(1, self.L - 1, 1):
             percentOfDel = np.random.choice(np.arange(0, 20, dtype=int)) / 100  # percents of removed elemets
             countOfDel = int(len(self.Layers[i]) * percentOfDel)  # number of removed elemets
             selection = np.random.choice((self.Layers[i]), replace=False, size=countOfDel)  # Delete elements
@@ -84,11 +89,11 @@ class Graph():
         # print(np.sum(countOfL))
 
         # Vizualuzation
-        # x = [i for i in np.arange(start = 0, stop = self.L)]
-        # y = norm.pdf(x, mn, sgm) * 100
-        # plt.plot(x, y)
-        # plt.show()
-        # print(x)
+        #x = [i for i in np.arange(start = 0, stop = self.L)]
+        #y = norm.pdf(x, mn, sgm) * 100
+        #plt.plot(x, y)
+        #plt.show()
+        #print(x)
 
     def Sigma(self, numLayers):
         """
@@ -111,16 +116,9 @@ class Graph():
         :return:
         self.graph: list of lists for holding nodes
         """
-        # connection strat node with second layer
-        for i in np.arange(len(self.Layers[self.start])):
-            input = np.random.choice(self.start, size=1)
-            self.addEdge([self.start], self.Layers[0][i])
-
-        # connection end-1 layer with end node
-        self.addEdge(self.Layers[self.L - 1], self.end)
 
         # layer cycle
-        for i in np.arange(0, self.L - 1):
+        for i in np.arange(0, self.L-1):
             curLayerNumElems = len(self.Layers[i])  # num of element in current layer
             nextLayerNumElems = len(self.Layers[i + 1])  # num of element in next layer
 
@@ -228,7 +226,7 @@ class Graph():
             self.graph[i] = (list(set(self.graph[i])))
 
 
-def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
+def checkAMOnCyclic(AM, GenAM, minWeigOfCon, start, end):
     """
     Checking the adjacency matrix for correctness.
     Loop removal.
@@ -237,10 +235,13 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
     :param AM:              Adjacency Matrix
     :param GenAM:           Smooth Genetic Matrix
     :param minWeigOfCon:    Minimum connection weight in a smooth matrix
+    :param start:           start node
+    :param end:             end node
+
     :return:
     AM, GenAM               Adjacency and mooth Genetic Matrices without loops and collisions
     """
-    """AM = np.array([[0, 0, 0, 1, 0],
+    '''AM = np.array([[0, 0, 0, 1, 0],
           [0, 0, 0, 0, 0],
           [1, 0, 0, 0, 1],
           [0, 0, 0, 0, 0],
@@ -250,7 +251,10 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon):
                    [0, 0, 0, 0, 0],
                    [1, 0, 0, 0, 1],
                    [0, 0, 0, 0, 0],
-                   [0, 1, 0, 0, 0]], dtype=float)"""
+                   [0, 1, 0, 0, 0]], dtype=float)'''
+
+    congestionInputs = np.array([[sum(AM[:, i]), i] for i in start]).reshape(-1,2)
+    minColInput = congestionInputs[np.argmin(congestionInputs[:, 0]), 1]
 
     # search ending nods without connections
     u = np.array(np.where(AM.sum(axis=1) == 0))
@@ -351,8 +355,10 @@ def main(num_elemetns, num_layers):
         else:
             AM[i, 1] = 1"""
 
-    #plt.imshow(AM)
-    #plt.show()
+    plt.imshow(AM)
+    ax = plt.gca()
+    ax.grid(color='w', linestyle='-', linewidth=2)
+    plt.show()
 
     # print(emptyRows)
     # print(AM)
@@ -360,7 +366,8 @@ def main(num_elemetns, num_layers):
 
     return AM
 
-main(10, 3)
+
+main(10, 4)
 
 
 """x = [i for i in np.arange(start = 1, stop = 4)] 
