@@ -18,7 +18,8 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import imshow
 
-from python_modules.GraphStructures import checkAMOnCyclic
+#from python_modules.GraphStructures import checkAMOnCyclic
+from GraphStructures import checkAMOnCyclic
 
 ## class for kepping parent info
 class Parent(NamedTuple):
@@ -201,8 +202,9 @@ def generateMutants(path, n_mutants, percent_mutations=0.03):
         GenAM = new_mutant
 
         # mutation of count connections
-        mut_range = np.arange(-3, 7)
-        mut_con = np.random.choice(mut_range)
+        #mut_range = np.arange(-2, 2)
+        #mut_con = np.random.choice(mut_range)
+        mut_con = 0 #!!! without mutation of connections
 
         # max powerfull connections in matrix
         valuesCon = sorted(GenAM.ravel(), reverse=True)[0:ch_parent.countOfConnections+mut_con]
@@ -259,9 +261,9 @@ def generateMutants(path, n_mutants, percent_mutations=0.03):
 
 
 path = '../Experiments/GeneticAlgorithmExp3_Gasnikov_15Luts_16_30Firs_15_nmse_Wide_Signal/Slots/3/Generations/4'
-path = '../Experiments/test_multiinput_GeneticAlgorithmExp3_Gasnikov_17Luts2D_17x17_39Firsx5coeff_nmse_Wide_Signal_2/Slots/1/Generations/1'
-generateMutants(path=path, n_mutants=10, percent_mutations=0.05)
-#generateChildrens(path, 1)
+path = 'D:/USERS/lvantonov/Develop/GeneticExperiments/Experiments/DPD-MAS/4_v5_GLG40_LL45_sqrt_jiadianrong_FUllPOWER/0_test_multiinput_multuoutput/Slots/1/Generations/5'
+#generateMutants(path=path, n_mutants=10, percent_mutations=0.05)
+#generateChildrens(path, 15)
 
 """.imshg = Graph(16, 3, 0, 1, 2)
 g.calcLayers()
