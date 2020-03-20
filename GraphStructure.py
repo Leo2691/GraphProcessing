@@ -3,7 +3,7 @@ import collections
 import copy
 import sys
 from scipy import io, sparse, stats
-# import networkx as nx
+#import networkx as nx
 import math
 import glob
 from typing import NamedTuple
@@ -241,42 +241,62 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon, start, end):
     :return:
     AM, GenAM               Adjacency and mooth Genetic Matrices without loops and collisions
     """
-    '''AM = np.array([[0, 0, 0, 1, 0],
-          [0, 0, 0, 0, 0],
-          [1, 0, 0, 0, 1],
-          [0, 0, 0, 0, 0],
-          [0, 1, 0, 0, 0]])
+    """AM = np.array([[0, 0, 0, 1, 0],
+                   [0, 0, 0, 0, 0],
+                   [1, 0, 0, 0, 1],
+                   [0, 0, 0, 0, 0],
+                   [0, 1, 0, 0, 0]])
 
     GenAM = np.array([[0, 0, 0, 1, 0],
                    [0, 0, 0, 0, 0],
                    [1, 0, 0, 0, 1],
                    [0, 0, 0, 0, 0],
-                   [0, 1, 0, 0, 0]], dtype=float)'''
+                   [0, 1, 0, 0, 0]], dtype=float)"""
 
+    # the output does not refer to anything
+    for i in end:
+        AM[i, :] = 0
+        GenAM[i, :] = 0
+    # nothing comes to input
+    for i in start:
+        AM[:, i] = 0
+        GenAM[:, i] = 0
+
+    # lock angle where located inputs and outputs. we remove connnects input->output
+    collsInOut = np.union1d(start, end)
+    for i in collsInOut:
+        for j in collsInOut:
+            if(AM[i,j] != 0):
+                AM[i,j] = 0
+                GenAM[i, j] = 0
+
+    #we define columns of inputs and outputs, to which the least references are made
     congestionInputs = np.array([[sum(AM[:, i]), i] for i in start]).reshape(-1,2)
     minColInput = congestionInputs[np.argmin(congestionInputs[:, 0]), 1]
+    congestionOutputs = np.array([[sum(AM[:, i]), i] for i in end]).reshape(-1, 2)
+    minColOutput = congestionOutputs[np.argmin(congestionOutputs[:, 0]), 1]
 
     # search ending nods without connections
     u = np.array(np.where(AM.sum(axis=1) == 0))
-    emptyRows = np.array(u)[np.array(u) != 1]
+    emptyRows = np.array(u)[~np.isin(np.array(u), end)]
     for i in emptyRows:
         if (AM[:, i].sum(axis=0) == 0):
             AM[:, i] = 0
             GenAM[:, i] = 0
         else:
-            AM[i, 1] = 1
-            GenAM[i, 1] = minWeigOfCon
+            AM[i, minColOutput] = 1
+            GenAM[i, minColOutput] = minWeigOfCon
 
     # search nods without inputs
     u = np.array(np.where(AM.sum(axis=0) == 0))
-    emptyColls = np.array(u)[np.array(u) != 0]
+    emptyColls = np.array(u)[~np.isin(np.array(u), start)]
     for i in emptyColls:
         if (AM[i, :].sum(axis=0) == 0):
             AM[i, :] = 0
             GenAM[i, :] = 0
         else:
-            AM[0, i] = 1
-            GenAM[0, i] = minWeigOfCon
+            AM[minColInput, i] = 1
+            GenAM[minColInput, i] = minWeigOfCon
 
     for i in np.arange(AM.shape[0]):
         for j in np.arange(AM.shape[1]):
@@ -285,7 +305,7 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon, start, end):
                 GenAM[i, j] = 0
 
     n = sum(sum(AM))
-    g1 = Graph(AM.shape[0], 1, 0, 1)
+    g1 = Graph(AM.shape[0], 1, start, end)
     for i in np.arange(AM.shape[0]):
         for j in np.arange(AM.shape[1]):
             if (AM[i, j] != 0):
@@ -301,25 +321,27 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon, start, end):
 
     # search ending nods without connections
     u = np.array(np.where(AM.sum(axis=1) == 0))
-    emptyRows = np.array(u)[np.array(u) != 1]
+    emptyRows = np.array(u)[~np.isin(np.array(u), end)]
     for i in emptyRows:
         if (AM[:, i].sum(axis=0) == 0):
             AM[:, i] = 0
             GenAM[:, i] = 0
         else:
-            AM[i, 1] = 1
-            GenAM[i, 1] = minWeigOfCon
+            AM[i, minColOutput] = 1
+            GenAM[i, minColOutput] = minWeigOfCon
 
     # search nods without inputs
     u = np.array(np.where(AM.sum(axis=0) == 0))
-    emptyColls = np.array(u)[np.array(u) != 0]
+    emptyColls = np.array(u)[~np.isin(np.array(u), start)]
     for i in emptyColls:
         if (AM[i, :].sum(axis=0) == 0):
             AM[i, :] = 0
             GenAM[i, :] = 0
         else:
-            AM[0, i] = 1
-            GenAM[0, i] = minWeigOfCon
+            AM[minColInput, i] = 1
+            GenAM[minColInput, i] = minWeigOfCon
+
+    AM = np.array(AM, dtype=int)
 
     # comparision AM and GenAM
     m = np.where(AM > 0)  # indexis of nonzeros
@@ -329,10 +351,47 @@ def checkAMOnCyclic(AM, GenAM, minWeigOfCon, start, end):
 
     return [AM, GenAM]
 
+def checkAMOnCyclicInMatlab(AM_, GenAM = [], size = 0, minWeigOfCon = 0, start_node = 0, end_node = 0):
+    """
+    Checking the adjacency matrix for correctness.
+    Loop removal.
+    Top Level Collision Resolution
 
-def main(num_elemetns, num_layers):
-    start_node = [0,1]
-    end_node = [2]
+    :param AM:              Adjacency Matrix
+    :param GenAM:           Smooth Genetic Matrix
+    :param start:           start node
+    :param end:             end node
+
+    :return:
+    AM, GenAM               Adjacency and mooth Genetic Matrices without loops and collisions
+    """
+
+    start = [int(i) for i in start_node]
+    end = [int(i) for i in end_node]
+
+    AM = np.array(AM_, dtype=int).reshape(int(size[0]), int(size[1]))
+
+    if len(GenAM) == 0:
+        GenAM_ = np.zeros((int(size[0]), int(size[1])))
+    else:
+        GenAM_ = np.array(GenAM, dtype=int).reshape(int(size[0]), int(size[1]))
+
+    [AM_clear, GenAM_clear] = checkAMOnCyclic(AM, GenAM_, minWeigOfCon, start, end)
+
+    if len(GenAM) == 0:
+        return AM_clear
+    else:
+        return [AM_clear, GenAM_clear]
+    #io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
+
+
+#checkAMOnCyclicInMatlab(1, 1, 1, [0], [1])
+
+def main(num_elemetns, num_layers, start_node, end_node):
+    #start_node = [0,1]
+    #end_node = [2,3]
+    start_node = [int(i) for i in start_node]
+    end_node = [int(i) for i in end_node]
     g = Graph(num_elemetns, num_layers, start_node, end_node)
     g.CalcRhomboidLayers()
     g.GenerateStruct()
@@ -355,21 +414,39 @@ def main(num_elemetns, num_layers):
         else:
             AM[i, 1] = 1"""
 
-    plt.imshow(AM)
-    ax = plt.gca()
-    ax.grid(color='w', linestyle='-', linewidth=2)
-    plt.show()
+    #plt.imshow(AM)
+    #ax = plt.gca()
+    #ax.grid(color='w', linestyle='-', linewidth=2)
+    #plt.show()
 
     # print(emptyRows)
     # print(AM)
-    io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
+    #io.savemat('AdjacencyMatrix.mat', mdict={'AM': AM})
 
     return AM
 
+#checkAMOnCyclicInMatlab(1, [5,5], [0], [1])
+#main(10, 4, [0.0, 1.0], [2.0, 3.0])
 
-main(10, 4)
+AM = np.array([[0, 0, 1, 1, 0, 0, 0],
+                   [1, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 1],
+                   [0, 0, 0, 1, 0, 1, 0],
+                   [1, 0, 0, 0, 0, 0, 1],
+                   [0, 1, 1, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0],
+                   ])
 
+AM_ = np.array([[0, 0, 1, 1, 0, 0, 0],
+                   [1, 0, 0, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 1],
+                   [0, 0, 0, 1, 0, 1, 0],
+                   [1, 0, 0, 0, 0, 0, 1],
+                   [0, 1, 1, 0, 0, 0, 0],
+                   [0, 0, 0, 0, 0, 0, 0],
+                   ], dtype=float)
 
+#[A, B] = checkAMOnCyclicInMatlab(AM, AM_, AM.shape, 0.0, [0], [1,2])
 """x = [i for i in np.arange(start = 1, stop = 4)] 
 mn = (min(x) + max(x)) / 2 
 sgm = Sigma(max(x)) 
@@ -381,3 +458,9 @@ sum = 2 * y1 + y2
 plt.plot(x, y) 
 plt.show() 
 print(x)"""
+
+def test():
+    A = np.random.randint(10, size=(10,10))
+    B = np.random.randint(10, size=(10, 10))
+
+    return [A, B]
